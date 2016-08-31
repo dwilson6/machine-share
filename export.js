@@ -39,7 +39,14 @@ function processConfig() {
                 util.copy(value, tmp + 'certs/' + name)
                 value = home + '/.docker/machine/certs/' + machine + '/' + name
             }
-            value = value.replace(home, '{{HOME}}')
+
+            if (key == 'AccessKey') {
+                value = '{{AWS_ACCESS_KEY_ID}}'
+            } else if (key == 'SecretKey') {
+                value = '{{AWS_SECRET_ACCESS_KEY}}'
+            } else {
+                value = value.replace(home, '{{HOME}}')
+            }
             parent[key] = value
         }
     })
