@@ -16,7 +16,12 @@ if (!machineZip) {
 }
 var machine = path.basename(machineZip)
 machine = machine.substring(0, machine.length - 4)
-var configDir = process.env.HOME + '/.docker/machine/machines/' + machine
+
+var machineStoragePath = process.env.HOME + '/.docker/machine'
+if(process.env.MACHINE_STORAGE_PATH) {
+    machineStoragePath = process.env.MACHINE_STORAGE_PATH
+}
+var configDir = machineStoragePath + '/machines/' + machine
 try {
     fs.statSync(configDir)
     console.log('that machine already exists')
@@ -32,7 +37,7 @@ unzip()
 processConfig()
 
 util.copyDir(tmp, configDir)
-util.copyDir(tmp + 'certs', process.env.HOME + '/.docker/machine/certs/' + machine)
+util.copyDir(tmp + 'certs', machineStoragePath + '/certs/' + machine)
 fse.rmrfSync(tmp)
 
 
@@ -49,7 +54,6 @@ function unzip() {
 }
 
 function processConfig() {
-    var home = process.env['HOME']
     var awsAccessKey = process.env['AWS_ACCESS_KEY_ID']
     var awsSecretKey = process.env['AWS_SECRET_ACCESS_KEY']
     var configName = tmp + 'config.json';
@@ -59,7 +63,7 @@ function processConfig() {
     util.recurseJson(config, function (parent, key, value) {
         if (typeof value === 'string') {
             parent[key] = value
-                .replace('{{HOME}}', home)
+                .replace('{{MACHINE_STORAGE_PATH}}', machineStoragePath)
                 .replace('{{AWS_ACCESS_KEY_ID}}', awsAccessKey)
                 .replace('{{AWS_SECRET_ACCESS_KEY}}', awsSecretKey)
         }
@@ -71,7 +75,7 @@ function processConfig() {
         var driver = JSON.parse(decoded)
 
         // update store path
-        driver.StorePath = process.env.HOME + '/.docker/machine'
+        driver.StorePath = machineStoragePath
 
         var updatedBlob = new Buffer(JSON.stringify(driver)).toString('base64')
 

@@ -19,7 +19,11 @@ if (!machine) {
 var tmp = '/tmp/' + machine + '/'
 fse.rmrfSync(tmp)
 
-var configDir = process.env.HOME + '/.docker/machine/machines/' + machine
+var machineStoragePath = process.env.HOME + '/.docker/machine'
+if(process.env.MACHINE_STORAGE_PATH) {
+    machineStoragePath = process.env.MACHINE_STORAGE_PATH
+}
+var configDir = machineStoragePath + '/machines/' + machine
 util.copyDir(configDir, tmp)
 fs.mkdirSync(tmp + 'certs')
 
@@ -34,10 +38,10 @@ function processConfig() {
 
     util.recurseJson(config, function (parent, key, value) {
         if (typeof value === 'string') {
-            if (util.startsWith(value, home + '/.docker/machine/certs/')) {
+            if (util.startsWith(value, machineStoragePath + '/certs/')) {
                 var name = value.substring(value.lastIndexOf('/') + 1)
                 util.copy(value, tmp + 'certs/' + name)
-                value = home + '/.docker/machine/certs/' + machine + '/' + name
+                value = machineStoragePath + '/certs/' + machine + '/' + name
             }
 
             if (key == 'AccessKey') {
@@ -45,7 +49,7 @@ function processConfig() {
             } else if (key == 'SecretKey') {
                 value = '{{AWS_SECRET_ACCESS_KEY}}'
             } else {
-                value = value.replace(home, '{{HOME}}')
+                value = value.replace(machineStoragePath, '{{MACHINE_STORAGE_PATH}}')
             }
             parent[key] = value
         }
