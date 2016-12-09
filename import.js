@@ -1,6 +1,5 @@
 #! /usr/bin/env node
 
-console.log('importing.')
 
 var fs = require('fs')
 var path = require('path')
@@ -22,12 +21,16 @@ if(process.env.MACHINE_STORAGE_PATH) {
     machineStoragePath = process.env.MACHINE_STORAGE_PATH
 }
 var configDir = machineStoragePath + '/machines/' + machine
-try {
-    fs.statSync(configDir)
-    console.log('that machine already exists')
-    process.exit(1)
-} catch (e) {
-    //ok
+var certDir = machineStoragePath + '/certs/' + machine
+if(dirExists(configDir)) {
+    if(machineArchiveHasChanged()) {
+        console.log('that machine exists but the archive has changed, importing ' + machine)
+    } else {
+        console.log('that machine already exists, skipping ' + machine)
+        process.exit(1)
+    }
+} else {
+    console.log('importing ' + machine)
 }
 
 var tmp = '/tmp/' + machine + '/'
@@ -37,9 +40,50 @@ unzip()
 processConfig()
 
 util.copyDir(tmp, configDir)
-util.copyDir(tmp + 'certs', machineStoragePath + '/certs/' + machine)
+util.copyDir(tmp + 'certs', certDir)
 fse.rmrfSync(tmp)
 
+
+function dirExists(dirName) {
+    try {
+        fs.statSync(configDir)
+    } catch (e) {
+        return false
+    }
+    return true
+}
+
+function machineArchiveHasChanged() {
+    var zip = new require('node-zip')()
+    zip.load(fs.readFileSync(machineZip))
+    for (var f in zip.files) {
+        var file = zip.files[f]
+        if (!file.dir) {
+            var existingFilePath;
+            if(file.name.indexOf('certs') == 0) {
+                existingFilePath=certDir + '/' + file.name.split('/')[1]
+            } else {
+                existingFilePath=configDir + '/' + file.name
+            }
+            var existingFile;
+            try {
+                existingFile=fs.readFileSync(existingFilePath)
+            } catch(err) {
+                console.log(existingFilePath + ' does not exist')
+                return true
+            }
+            var newFileContent=file.asNodeBuffer().toString()
+            if(file.name == 'config.json') {
+                newFileContent=renderConfig(newFileContent)
+            }
+            if(existingFile.toString() !== newFileContent) {
+                console.log(file.name + ' has changed')
+                return true
+            } 
+        }
+    }
+    return false
+}
 
 function unzip() {
     var zip = new require('node-zip')()
@@ -54,11 +98,17 @@ function unzip() {
 }
 
 function processConfig() {
-    var awsAccessKey = process.env['AWS_ACCESS_KEY_ID']
-    var awsSecretKey = process.env['AWS_SECRET_ACCESS_KEY']
     var configName = tmp + 'config.json';
     var configFile = fs.readFileSync(configName)
-    var config = JSON.parse(configFile.toString())
+
+    fs.writeFileSync(configName, renderConfig(configFile.toString()))
+}
+
+
+function renderConfig(configString) {
+    var awsAccessKey = process.env['AWS_ACCESS_KEY_ID']
+    var awsSecretKey = process.env['AWS_SECRET_ACCESS_KEY']
+    var config = JSON.parse(configString)
 
     util.recurseJson(config, function (parent, key, value) {
         if (typeof value === 'string') {
@@ -84,5 +134,5 @@ function processConfig() {
     }
 
 
-    fs.writeFileSync(configName, JSON.stringify(config))
+    return JSON.stringify(config)
 }
